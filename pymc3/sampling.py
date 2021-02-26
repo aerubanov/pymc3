@@ -27,7 +27,6 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Union, cast
 
 import aesara
 import aesara.gradient as tg
-import arviz
 import numpy as np
 import packaging
 import xarray
@@ -38,6 +37,7 @@ from fastprogress.fastprogress import progress_bar
 import pymc3 as pm
 
 from pymc3.aesaraf import inputvars
+from pymc3.backends.arviz import _DefaultTrace
 from pymc3.backends.base import BaseTrace, MultiTrace
 from pymc3.backends.ndarray import NDArray
 from pymc3.blocking import DictToArrayBijection
@@ -344,7 +344,7 @@ def sample(
         Whether to return the trace as an :class:`arviz:arviz.InferenceData` (True) object or a `MultiTrace` (False)
         Defaults to `False`, but we'll switch to `True` in an upcoming release.
     idata_kwargs : dict, optional
-        Keyword arguments for :func:`arviz:arviz.from_pymc3`
+        Keyword arguments for :func:`pymc3.to_inference_data`
     mp_ctx : multiprocessing.context.BaseContent
         A multiprocessing context for parallel sampling. See multiprocessing
         documentation for details.
@@ -639,7 +639,7 @@ def sample(
         ikwargs = dict(model=model, save_warmup=not discard_tuned_samples, log_likelihood=False)
         if idata_kwargs:
             ikwargs.update(idata_kwargs)
-        idata = arviz.from_pymc3(trace, **ikwargs)
+        idata = pm.to_inference_data(trace, **ikwargs)
 
     if compute_convergence_checks:
         if draws - tune < 100:
@@ -1544,61 +1544,6 @@ def stop_tuning(step):
     """Stop tuning the current step method."""
     step.stop_tuning()
     return step
-
-
-class _DefaultTrace:
-    """
-    Utility for collecting samples into a dictionary.
-
-    Name comes from its similarity to ``defaultdict``:
-    entries are lazily created.
-
-    Parameters
-    ----------
-    samples : int
-        The number of samples that will be collected, per variable,
-        into the trace.
-
-    Attributes
-    ----------
-    trace_dict : Dict[str, np.ndarray]
-        A dictionary constituting a trace.  Should be extracted
-        after a procedure has filled the `_DefaultTrace` using the
-        `insert()` method
-    """
-
-    trace_dict: Dict[str, np.ndarray] = {}
-    _len: Optional[int] = None
-
-    def __init__(self, samples: int):
-        self._len = samples
-        self.trace_dict = {}
-
-    def insert(self, k: str, v, idx: int):
-        """
-        Insert `v` as the value of the `idx`th sample for the variable `k`.
-
-        Parameters
-        ----------
-        k: str
-            Name of the variable.
-        v: anything that can go into a numpy array (including a numpy array)
-            The value of the `idx`th sample from variable `k`
-        ids: int
-            The index of the sample we are inserting into the trace.
-        """
-        value_shape = np.shape(v)
-
-        # initialize if necessary
-        if k not in self.trace_dict:
-            array_shape = (self._len,) + value_shape
-            self.trace_dict[k] = np.empty(array_shape, dtype=np.array(v).dtype)
-
-        # do the actual insertion
-        if value_shape == ():
-            self.trace_dict[k][idx] = v
-        else:
-            self.trace_dict[k][idx, :] = v
 
 
 def sample_posterior_predictive(

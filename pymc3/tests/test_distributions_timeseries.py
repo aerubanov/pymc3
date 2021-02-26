@@ -21,12 +21,9 @@ from pymc3.distributions.timeseries import AR, AR1, GARCH11, EulerMaruyama
 from pymc3.model import Model
 from pymc3.sampling import sample, sample_posterior_predictive
 from pymc3.tests.helpers import select_by_precision
-<<<<<<< HEAD
 
 # pytestmark = pytest.mark.usefixtures("seeded_test")
 pytestmark = pytest.mark.xfail(reason="This test relies on the deprecated Distribution interface")
-=======
->>>>>>> Rename Theano to Aesara
 
 
 def test_AR():
