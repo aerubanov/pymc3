@@ -27,6 +27,7 @@ from aesara.graph.op import Op
 from aesara.tensor.nlinalg import det, eigh, matrix_inverse, trace
 from aesara.tensor.random.basic import MultinomialRV, dirichlet, multivariate_normal
 from aesara.tensor.random.utils import broadcast_params
+from aesara.tensor.random.op import RandomVariable
 from aesara.tensor.slinalg import (
     Cholesky,
     Solve,
@@ -1982,44 +1983,37 @@ class CAR(Continuous):
         Biometrics, Vol. 61, No. 4 (Dec., 2005), pp. 950-961
     """
 
-    def __init__(self, mu, W, alpha, tau, sparse=False, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
+    @classmethod
+    def dist(cls,  mu, W, alpha, tau, sparse=False, *args, **kwargs):
         D = W.sum(axis=0)
-        d, _ = W.shape
 
-        self.d = d
-        self.median = self.mode = self.mean = self.mu = aet.as_tensor_variable(mu)
-        self.sparse = sparse
+        mu = aet.as_tensor_variable(mu)
 
         if not W.ndim == 2 or not np.allclose(W, W.T):
             raise ValueError("W must be a symmetric adjacency matrix.")
 
         if sparse:
             W_sparse = scipy.sparse.csr_matrix(W)
-            self.W = aesara.sparse.as_sparse_variable(W_sparse)
+            W = aesara.sparse.as_sparse_variable(W_sparse)
         else:
-            self.W = aet.as_tensor_variable(W)
+            W = aet.as_tensor_variable(W)
 
         # eigenvalues of D^−1/2 * W * D^−1/2
         Dinv_sqrt = np.diag(1 / np.sqrt(D))
         DWD = np.matmul(np.matmul(Dinv_sqrt, W), Dinv_sqrt)
-        self.lam = scipy.linalg.eigvalsh(DWD)
-        self.D = aet.as_tensor_variable(D)
+        lam = scipy.linalg.eigvalsh(DWD)
+        D = aet.as_tensor_variable(D)
 
         tau = aet.as_tensor_variable(tau)
         if tau.ndim > 0:
-            self.tau = tau[:, None]
-        else:
-            self.tau = tau
+            tau = tau[:, None]
 
         alpha = aet.as_tensor_variable(alpha)
         if alpha.ndim > 0:
-            self.alpha = alpha[:, None]
-        else:
-            self.alpha = alpha
+            alpha = alpha[:, None]
+        return super().dist([mu, W, alpha, tau, sparse, D, lam], **kwargs)
 
-    def logp(self, value):
+    def logp(value, mu, W, alpha, tau, sparse, D, lam):
         """
         Calculate log-probability of a CAR-distributed vector
         at specified value. This log probability function differs from
@@ -2035,26 +2029,27 @@ class CAR(Continuous):
         -------
         TensorVariable
         """
+        d, _ = W.shape
 
         if value.ndim == 1:
             value = value[None, :]
 
-        logtau = self.d * aet.log(self.tau).sum()
-        logdet = aet.log(1 - self.alpha.T * self.lam[:, None]).sum()
-        delta = value - self.mu
+        logtau = d * aet.log(tau).sum()
+        logdet = aet.log(1 - alpha.T * lam[:, None]).sum()
+        delta = value - mu
 
-        if self.sparse:
-            Wdelta = aesara.sparse.dot(delta, self.W)
+        if sparse:
+            Wdelta = aesara.sparse.dot(delta, W)
         else:
-            Wdelta = aet.dot(delta, self.W)
+            Wdelta = aet.dot(delta, W)
 
-        tau_dot_delta = self.D[None, :] * delta - self.alpha * Wdelta
-        logquad = (self.tau * delta * tau_dot_delta).sum(axis=-1)
+        tau_dot_delta = D[None, :] * delta - alpha * Wdelta
+        logquad = (tau * delta * tau_dot_delta).sum(axis=-1)
         return bound(
             0.5 * (logtau + logdet - logquad),
-            aet.all(self.alpha <= 1),
-            aet.all(self.alpha >= -1),
-            self.tau > 0,
+            aet.all(alpha <= 1),
+            aet.all(alpha >= -1),
+            tau > 0,
         )
 
     def random(self, point=None, size=None):
