@@ -1941,6 +1941,36 @@ class KroneckerNormal(Continuous):
         return ["mu"]
 
 
+class CARRV(RandomVariable):
+    name = "car"
+
+    # Provide the number of dimensions for this RV (e.g. `0` for a scalar, `1`
+    # for a vector, etc.)
+    ndim_supp = 1
+
+    # Provide the number of dimensions for each parameter of the RV (e.g. if
+    # there's only one vector parameter, `[1]`; for two parameters, one a
+    # matrix and the other a scalar, `[2, 0]`; etc.)
+    ndims_params = [1, 2, 1, 1, 0]
+
+    # The NumPy/Aesara dtype for this RV (e.g. `"int32"`, `"int64"`).
+    dtype = "floatX"
+
+    # An pretty text and LaTeX representation for the RV
+    _print_name = ("CAR", "\\operatorname{CAR}")
+
+    @classmethod
+    def rng_fn(cls, rng: np.random.RandomState,  mu, W, alpha, tau, sparse, size):
+        Q = scipy.sparse.csgraph.reverse_cuthill_mckee(scipy.sparse.csr_matrix(W))
+        L = scipy.linalg.cholesky_banded(Q)
+        z = rng.normal(size=W.size[0])
+        samples = scipy.linalg.cho_solve_banded(L, z)
+        return samples
+
+
+car = CARRV()
+
+
 class CAR(Continuous):
     R"""
     Likelihood for a conditional autoregression. This is a special case of the
@@ -1982,10 +2012,10 @@ class CAR(Continuous):
         "Generalized Hierarchical Multivariate CAR Models for Areal Data"
         Biometrics, Vol. 61, No. 4 (Dec., 2005), pp. 950-961
     """
+    rv_op = car
 
     @classmethod
     def dist(cls,  mu, W, alpha, tau, sparse=False, *args, **kwargs):
-        D = W.sum(axis=0)
 
         mu = aet.as_tensor_variable(mu)
 
@@ -1999,10 +2029,8 @@ class CAR(Continuous):
             W = aet.as_tensor_variable(W)
 
         # eigenvalues of D^−1/2 * W * D^−1/2
-        Dinv_sqrt = np.diag(1 / np.sqrt(D))
-        DWD = np.matmul(np.matmul(Dinv_sqrt, W), Dinv_sqrt)
-        lam = scipy.linalg.eigvalsh(DWD)
-        D = aet.as_tensor_variable(D)
+
+        #D = aet.as_tensor_variable(D)
 
         tau = aet.as_tensor_variable(tau)
         if tau.ndim > 0:
@@ -2011,9 +2039,9 @@ class CAR(Continuous):
         alpha = aet.as_tensor_variable(alpha)
         if alpha.ndim > 0:
             alpha = alpha[:, None]
-        return super().dist([mu, W, alpha, tau, sparse, D, lam], **kwargs)
+        return super().dist([mu, W, alpha, tau, np.array(sparse)], **kwargs)
 
-    def logp(value, mu, W, alpha, tau, sparse, D, lam):
+    def logp(value, mu, W, alpha, tau, sparse):
         """
         Calculate log-probability of a CAR-distributed vector
         at specified value. This log probability function differs from
@@ -2029,6 +2057,13 @@ class CAR(Continuous):
         -------
         TensorVariable
         """
+
+        D = W.sum(axis=0)
+
+        Dinv_sqrt = np.diag(1 / np.sqrt(D))
+        DWD = np.matmul(np.matmul(Dinv_sqrt, W), Dinv_sqrt)
+        lam = scipy.linalg.eigvalsh(DWD)
+
         d, _ = W.shape
 
         if value.ndim == 1:
