@@ -1943,28 +1943,30 @@ class KroneckerNormal(Continuous):
 
 class CARRV(RandomVariable):
     name = "car"
-
-    # Provide the number of dimensions for this RV (e.g. `0` for a scalar, `1`
-    # for a vector, etc.)
     ndim_supp = 1
-
-    # Provide the number of dimensions for each parameter of the RV (e.g. if
-    # there's only one vector parameter, `[1]`; for two parameters, one a
-    # matrix and the other a scalar, `[2, 0]`; etc.)
     ndims_params = [1, 2, 1, 1, 0]
-
-    # The NumPy/Aesara dtype for this RV (e.g. `"int32"`, `"int64"`).
     dtype = "floatX"
-
-    # An pretty text and LaTeX representation for the RV
     _print_name = ("CAR", "\\operatorname{CAR}")
 
     @classmethod
     def rng_fn(cls, rng: np.random.RandomState,  mu, W, alpha, tau, sparse, size):
-        Q = scipy.sparse.csgraph.reverse_cuthill_mckee(scipy.sparse.csr_matrix(W))
-        L = scipy.linalg.cholesky_banded(Q)
+        D = scipy.spapse.diags(W.sum(axis=0))
+        if not scipy.sparse.issparse(W):
+            W = scipy.sparse.csr_matrix(W)
+        tau = scipy.sparse.csr_matrix(tau)
+        alpha = scipy.sparse.csr_matrix(alpha)
+        perm_array = scipy.sparse.csgraph.reverse_cuthill_mckee(W,  symmetric_mode=True)
+        W = W[perm_array, :]
+        W = W[:, perm_array]
+        Q = tau.multiply((D - alpha.multiply(W)))
+        Qb = Q.diagonal()
+        u = 1
+        while np.count_nonzero(Q.diagonal(u)) > 0:
+            Qb = np.vstack((np.pad(Q.diagonal(u), (u, 0), constant_values=(0, 0)), Qb))
+            u += 1
+        L = scipy.linalg.cholesky_banded(Qb, lower=False)
         z = rng.normal(size=W.size[0])
-        samples = scipy.linalg.cho_solve_banded(L, z)
+        samples = scipy.linalg.cho_solve_banded((L, False), z)
         return samples
 
 
