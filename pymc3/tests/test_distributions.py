@@ -2785,8 +2785,8 @@ def test_car_logp(shape):
         [[0.0, 1.0, 1.0, 0.0], [1.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 1.0], [0.0, 1.0, 1.0, 0.0]]
     )
 
-    tau = 2.0
-    alpha = 0.5
+    tau = [2.0, 2.0, 2.0, 2.0]
+    alpha = [0.5, 0.5, 0.5, 0.5]
     mu = np.zeros(4)
 
     # Compute CAR covariance matrix and resulting MVN logp
@@ -2795,7 +2795,7 @@ def test_car_logp(shape):
     cov = np.linalg.inv(prec)
     scipy_logp = scipy.stats.multivariate_normal.logpdf(xs, mu, cov)
 
-    car_logp = CAR.dist(mu, W, alpha, tau, shape=shape).logp(xs).eval()
+    car_logp = CAR.dist(mu, W, alpha, tau).logp(xs).eval()
 
     # Check to make sure that the CAR and MVN log PDFs are equivalent
     # up to an additive constant which is independent of the CAR parameters

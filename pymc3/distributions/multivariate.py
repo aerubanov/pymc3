@@ -1949,7 +1949,13 @@ class CARRV(RandomVariable):
     _print_name = ("CAR", "\\operatorname{CAR}")
 
     @classmethod
-    def rng_fn(cls, rng: np.random.RandomState,  mu, W, alpha, tau, sparse, size):
+    def rng_fn(cls, rng: np.random.RandomState,  mu, W, alpha, tau, size):
+        """
+        Implementation of algorithm from paper
+        Havard Rue, 2001. "Fast sampling of Gaussian Markov random fields,"
+        Journal of the Royal Statistical Society Series B, Royal Statistical Society,
+        vol. 63(2), pages 325-338. DOI: 10.1111/1467-9868.00288
+        """
         D = scipy.sparse.diags(W.sum(axis=0))
         if not scipy.sparse.issparse(W):
             W = scipy.sparse.csr_matrix(W)
@@ -2041,9 +2047,9 @@ class CAR(Continuous):
         alpha = aet.as_tensor_variable(alpha)
         if alpha.ndim > 0:
             alpha = alpha[:, None]
-        return super().dist([mu, W, alpha, tau, np.array(sparse)], **kwargs)
+        return super().dist([mu, W, alpha, tau], **kwargs)
 
-    def logp(value, mu, W, alpha, tau, sparse):
+    def logp(value, mu, W, alpha, tau, sparse=False):
         """
         Calculate log-probability of a CAR-distributed vector
         at specified value. This log probability function differs from
