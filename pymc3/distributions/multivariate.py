@@ -1950,7 +1950,7 @@ class CARRV(RandomVariable):
 
     @classmethod
     def rng_fn(cls, rng: np.random.RandomState,  mu, W, alpha, tau, sparse, size):
-        D = scipy.spapse.diags(W.sum(axis=0))
+        D = scipy.sparse.diags(W.sum(axis=0))
         if not scipy.sparse.issparse(W):
             W = scipy.sparse.csr_matrix(W)
         tau = scipy.sparse.csr_matrix(tau)
@@ -1965,7 +1965,7 @@ class CARRV(RandomVariable):
             Qb = np.vstack((np.pad(Q.diagonal(u), (u, 0), constant_values=(0, 0)), Qb))
             u += 1
         L = scipy.linalg.cholesky_banded(Qb, lower=False)
-        z = rng.normal(size=W.size[0])
+        z = rng.normal(size=W.shape[0], loc=mu)
         samples = scipy.linalg.cho_solve_banded((L, False), z)
         return samples
 
